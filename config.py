@@ -1,7 +1,7 @@
 import os
 
 # 🔒 Переменные окружения (подключаются в настройках Render)
-BOT_TOKEN = os.environ.get "8890432182:AAHT8obAZEoWFQEZbTlYZZOr11MYZeRLv44"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
