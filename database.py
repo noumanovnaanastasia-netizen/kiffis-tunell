@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 from supabase import create_client, Client
 import config
 
-# 🔌 Подключаемся к Supabase
-supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+# 🔌 Подключаемся к Supabase с жесткой защитой от пустых URL
+url_str = str(config.SUPABASE_URL or "https://supabase.co")
+key_str = str(config.SUPABASE_KEY or "placeholder")
+supabase: Client = create_client(url_str, key_str)
 
 # 🧙‍♂️ Авто-создание всех таблиц прямо из кода
 async def init_database():
