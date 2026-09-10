@@ -15,9 +15,9 @@ PHOTO_SUPPORT = "https://t.me/banerss777/11"
 
 
 # 🕊 Текстовые ссылки на бесплатные пулы из проверенных репозиториев
-URL_AVENCORES_VPN = "https://github.com"
-URL_AVENCORES_COMBO = "https://github.com"
-URL_IGARECK_WHITELIST = "https://github.com"
+URL_AVENCORES_VPN = "https://github.com/AvenCores/goida-vpn-configs"
+URL_AVENCORES_COMBO = "https://githubusercontent.com"
+URL_IGARECK_WHITELIST = "https://github.com/igareck/vpn-configs-for-russia"
 
 # 📊 Утвержденная тарифная сетка в Telegram Stars (⭐)
 TARIFFS = {
