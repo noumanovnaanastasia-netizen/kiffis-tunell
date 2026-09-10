@@ -14,7 +14,7 @@ def run():
     app.run(host='0.0.0.0', port=8080)
 
 # 2. Чистый запуск бота
-bot = Bot(token="СЮДА_ВСТАВЬТЕ_ВАШ_НОВЫЙ_ТОКЕН")
+bot = Bot(token="8945413131:AAEoscGljaqoMZoz95CFyiy7OboLT5cheys"
 dp = Dispatcher()
 
 # Обработчик команды /start
