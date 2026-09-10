@@ -12,13 +12,12 @@ import database
 
 router = Router()
 
-# 🧠 Описание состояний для ввода промокодов и админки
+# 🧠 Состояния для ввода промокодов и админки
 class BotStates(StatesGroup):
     waiting_for_promo = State()
     waiting_for_admin_broadcast = State()
-    waiting_for_ban_id = State()
 
-# 🌸 УНИВЕРСАЛЬНЫЕ ТЕКСТЫ ДЛЯ ИНТЕРФЕЙСА
+# 🌸 ТЕКСТ ПРИВЕТСТВИЯ
 START_TEXT = (
     "⚡️ Добро пожаловать в Kiffis Tunnel!\n\n"
     "Это твой персональный и надёжный доступ к быстрому интернету без ограничений на высокой скорости.\n\n"
@@ -27,7 +26,7 @@ START_TEXT = (
     "Чтобы настроить подключение, перейди в Личный кабинет по кнопке ниже 👇"
 )
 
-# 🎛 ГЛАВНЫЕ НАВЕСНЫЕ КНОПКИ (В самом низу экрана)
+# 🎛 НАВЕСНЫЕ КНОПКИ (Внизу экрана)
 def get_main_menu_keyboard():
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -36,7 +35,7 @@ def get_main_menu_keyboard():
     )
     return builder.as_markup()
 
-# 🐾 ГЛАВНОЕ МЕНЮ И ЛИЧНЫЙ КАБИНЕТ
+# 🐾 ОБРАБОТКА /START И ПРОФИЛЯ
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     await database.create_user(message.from_user.id, message.from_user.username)
@@ -50,33 +49,40 @@ async def cmd_start(message: Message):
 async def open_profile(callback: CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
-    user = await database.get_user(user_id)
+    user_list = await database.get_user(user_id)
+    user = user_list[0] if (user_list and isinstance(user_list, list)) else user_list
     
     status = "🛡 Не защищено / Истекла"
     expire_str = "Отсутствует"
-    if user and user["expire_date"]:
-        expire_dt = datetime.fromisoformat(user["expire_date"].replace("Z", "+00:00"))
-        if expire_dt.timestamp() > datetime.now().timestamp():
-            status = "🛡 Защищено"
-            expire_str = expire_dt.strftime("%d.%m.%Y в %H:%M")
+    devices_count = 1
+    test_used = True
+    
+    if user:
+        devices_count = user.get("devices", 1)
+        test_used = user.get("test_used", True)
+        if user.get("expire_date"):
+            expire_dt = datetime.fromisoformat(user["expire_date"].replace("Z", "+00:00"))
+            if expire_dt.timestamp() > datetime.now().timestamp():
+                status = "🛡 Защищено"
+                expire_str = expire_dt.strftime("%d.%m.%Y в %H:%M")
 
     profile_caption = (
         f"⚡️ Kiffis Tunnel | Личный кабинет\n\n"
         f"<b>Пользователь:</b> @{callback.from_user.username or 'User'}\n"
         f"<b>Статус сети:</b> {status}\n"
         f"<b>Период подписки:</b> до {expire_str}\n"
-        f"<b>Активных устройств:</b> {user['devices'] if user else 1} из 5\n\n"
+        f"<b>Активных устройств:</b> {devices_count} из 5\n\n"
         f"🪐 Твой персональный ключ доступа готов к работе. Используй меню ниже для управления подпиской, активации промокодов и просмотра инструкций."
     )
 
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🌐 Просто VPN", callback_data="buy_select_duration:vpn"),
-        InlineKeyboardButton(text="🧦 Прокси", callback_data="buy_select_duration:proxy")
+        InlineKeyboardButton(text="🌐 Просто VPN", callback_data="buy_duration:vpn"),
+        InlineKeyboardButton(text="🧦 Прокси", callback_data="buy_duration:proxy")
     )
     builder.row(
-        InlineKeyboardButton(text="🤍 Белые списки", callback_data="buy_select_duration:whitelist"),
-        InlineKeyboardButton(text="🔄 VPN + БС (Комбо)", callback_data="buy_select_duration:combo")
+        InlineKeyboardButton(text="🤍 Белые списки", callback_data="buy_duration:whitelist"),
+        InlineKeyboardButton(text="🔄 VPN + БС (Комбо)", callback_data="buy_duration:combo")
     )
     builder.row(
         InlineKeyboardButton(text="📖 Инструкция", url="https://telegra.ph"),
@@ -87,7 +93,7 @@ async def open_profile(callback: CallbackQuery):
         InlineKeyboardButton(text="📄 Соглашение", url="https://telegra.ph")
     )
     
-    if user and not user["test_used"]:
+    if user and not test_used:
         builder.row(InlineKeyboardButton(text="🎁 Взять бесплатный тест (3 дня)", callback_data="take_free_test"))
 
     await callback.message.edit_media(
@@ -98,10 +104,13 @@ async def open_profile(callback: CallbackQuery):
 @router.callback_query(F.data == "take_free_test")
 async def take_free_test(callback: CallbackQuery):
     user_id = callback.from_user.id
-    user = await database.get_user(user_id)
-    if user and user["test_used"]:
+    user_list = await database.get_user(user_id)
+    user = user_list[0] if (user_list and isinstance(user_list, list)) else user_list
+    
+    if user and user.get("test_used", False):
         await callback.answer("❌ Ты уже активировал тестовый период, котик!", show_alert=True)
         return
+        
     await database.activate_test_period(user_id)
     await callback.answer("✨ 3 дня бесплатного теста успешно активированы!", show_alert=True)
     await open_profile(callback)
@@ -121,16 +130,16 @@ async def process_promo(message: Message, state: FSMContext):
     result = await database.apply_promo(message.from_user.id, code_text)
     await message.answer(result)
     await state.clear()
-@router.callback_query(F.data.startswith("buy_select_duration:"))
+@router.callback_query(F.data.startswith("buy_duration:"))
 async def buy_select_duration(callback: CallbackQuery):
     await callback.answer()
     tariff_type = callback.data.split(":")[1]
     
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="⏳ 3 дня", callback_data=f"buy_select_devs:{tariff_type}:3_days"),
-        InlineKeyboardButton(text="📅 1 месяц", callback_data=f"buy_select_devs:{tariff_type}:1_month"),
-        InlineKeyboardButton(text="🗓 3 месяца", callback_data=f"buy_select_devs:{tariff_type}:3_months")
+        InlineKeyboardButton(text="⏳ 3 дня", callback_data=f"buy_devs:{tariff_type}:3_days"),
+        InlineKeyboardButton(text="📅 1 месяц", callback_data=f"buy_devs:{tariff_type}:1_month"),
+        InlineKeyboardButton(text="🗓 3 месяца", callback_data=f"buy_devs:{tariff_type}:3_months")
     )
     builder.row(InlineKeyboardButton(text="⬅️ Назад в профиль", callback_data="open_profile"))
     
@@ -139,7 +148,7 @@ async def buy_select_duration(callback: CallbackQuery):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(F.data.startswith("buy_select_devs:"))
+@router.callback_query(F.data.startswith("buy_devs:"))
 async def buy_select_devs(callback: CallbackQuery):
     await callback.answer()
     data_parts = callback.data.split(":")
@@ -151,24 +160,24 @@ async def buy_select_devs(callback: CallbackQuery):
     
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text=f"📱 1 устр. (⭐{prices[1]})", callback_data=f"checkout:{tariff_type}:{duration}:1"),
-        InlineKeyboardButton(text=f"📱 2 устр. (⭐{prices[2]})", callback_data=f"checkout:{tariff_type}:{duration}:2")
+        InlineKeyboardButton(text=f"📱 1 устр. (⭐{prices[1]})", callback_data=f"pay:{tariff_type}:{duration}:1"),
+        InlineKeyboardButton(text=f"📱 2 устр. (⭐{prices[2]})", callback_data=f"pay:{tariff_type}:{duration}:2")
     )
     builder.row(
-        InlineKeyboardButton(text=f"📱 3 устр. (⭐{prices[3]})", callback_data=f"checkout:{tariff_type}:{duration}:3"),
-        InlineKeyboardButton(text=f"📱 4 устр. (⭐{prices[4]})", callback_data=f"checkout:{tariff_type}:{duration}:4")
+        InlineKeyboardButton(text=f"📱 3 устр. (⭐{prices[3]})", callback_data=f"pay:{tariff_type}:{duration}:3"),
+        InlineKeyboardButton(text=f"📱 4 устр. (⭐{prices[4]})", callback_data=f"pay:{tariff_type}:{duration}:4")
     )
     builder.row(
-        InlineKeyboardButton(text=f"📱 5 устр. (⭐{prices[5]})", callback_data=f"checkout:{tariff_type}:{duration}:5")
+        InlineKeyboardButton(text=f"📱 5 устр. (⭐{prices[5]})", callback_data=f"pay:{tariff_type}:{duration}:5")
     )
-    builder.row(InlineKeyboardButton(text="⬅️ Назад к срокам", callback_data=f"buy_select_duration:{tariff_type}"))
+    builder.row(InlineKeyboardButton(text="⬅️ Назад к срокам", callback_data=f"buy_duration:{tariff_type}"))
     
     await callback.message.edit_media(
         media=InlineKeyboardBuilder.media_photo(media=config.PHOTO_TARIFFS, caption="📱 <b>Выбери количество одновременно подключаемых устройств:</b>"),
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(F.data.startswith("checkout:"))
+@router.callback_query(F.data.startswith("pay:"))
 async def checkout(callback: CallbackQuery):
     await callback.answer()
     data_parts = callback.data.split(":")
@@ -179,16 +188,15 @@ async def checkout(callback: CallbackQuery):
     category = "premium" if tariff_type in ["whitelist", "combo"] else "base"
     base_price = config.TARIFFS[category][duration][devs]
     
-    user = await database.get_user(callback.from_user.id)
+    user_data = await database.get_user(callback.from_user.id)
+    user = user_data if not isinstance(user_data, list) else user_data[0]
     final_price = base_price
     
     if user:
-        discount = user[0].get("active_discount", 0) if isinstance(user, list) else user.get("active_discount", 0)
-        minus_stars = user[0].get("active_minus_stars", 0) if isinstance(user, list) else user.get("active_minus_stars", 0)
+        discount = user.get("active_discount", 0)
+        minus_stars = user.get("active_minus_stars", 0)
         if discount > 0:
-            if discount == 40 and base_price < 50:
-                pass
-            else:
+            if not (discount == 40 and base_price < 50):
                 final_price = int(base_price * (1 - discount / 100))
         if minus_stars > 0:
             final_price = base_price - minus_stars
@@ -200,7 +208,7 @@ async def checkout(callback: CallbackQuery):
     
     await callback.message.answer_invoice(
         title="Оплата тарифа Kiffis Tunnel",
-        description=f"Тариф: {tariff_type} | Срок: {duration}",
+        description=f"Тариф: {tariff_type} | Срок: {duration} | Устройств: {devs}",
         prices=prices,
         provider_token="",
         payload=f"{tariff_type}:{duration}:{devs}",
@@ -221,10 +229,10 @@ async def process_successful_payment(message: Message):
     devs = int(data_parts[2])
     
     days = 3 if duration == "3_days" else (30 if duration == "1_month" else 90)
-    user = await database.get_user(message.from_user.id)
-    user_data = user[0] if isinstance(user, list) else user
+    user_data = await database.get_user(message.from_user.id)
+    user = user_data if not isinstance(user_data, list) else user_data[0]
     
-    current_expire = datetime.fromisoformat(user_data["expire_date"].replace("Z", "+00:00")) if user_data and user_data.get("expire_date") else datetime.now()
+    current_expire = datetime.fromisoformat(user["expire_date"].replace("Z", "+00:00")) if user and user.get("expire_date") else datetime.now()
     new_expire = max(current_expire, datetime.now()) + timedelta(days=days)
     
     database.supabase.table("users").update({
