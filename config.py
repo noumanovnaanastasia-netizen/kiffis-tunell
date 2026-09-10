@@ -1,10 +1,10 @@
 import os
 
 # 🔒 Переменные окружения (настраиваются в панели управления Render)
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+BOT_TOKEN = os.environ.get("8917018432:AAHomlpYmYcmM_-KMv0TsrmQ_Xv4xBFfDjc")
+ADMIN_ID = int(os.environ.get("7303801260", 0))
+SUPABASE_URL = os.environ.get("https://ftefxgzjhzokapqokprd.supabase.com")
+SUPABASE_KEY = os.environ.get("sb_publishable_kTrpcThrV4nzfruaADpQ7w_TSpFTlFW")
 
 # 🎨 Ссылки на твои потрясающие баннеры из канала @banerss777
 PHOTO_MAIN_MENU = "https://t.me/banerss777/9"
