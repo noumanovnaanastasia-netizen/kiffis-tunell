@@ -7,10 +7,12 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 # 🎨 Ссылки на твои потрясающие баннеры с Telegra.ph
-PHOTO_MAIN_MENU = "https://telegra.ph"
-PHOTO_TARIFFS = "https://telegra.ph"
-PHOTO_INSTRUCTIONS = "https://telegra.ph"
-PHOTO_PROMO = "https://telegra.ph"
+PHOTO_MAIN_MENU = "https://t.me/banerss777/9"
+PHOTO_TARIFFS = "https://t.me/banerss777/8"
+PHOTO_INSTRUCTIONS = "https://t.me/banerss777/7"
+PHOTO_PROMO = "https://t.me/banerss777/6"
+PHOTO_SUPPORT = "https://t.me/banerss777/11"
+
 
 # 🕊 Текстовые ссылки на бесплатные пулы из проверенных репозиториев
 URL_AVENCORES_VPN = "https://github.com"
