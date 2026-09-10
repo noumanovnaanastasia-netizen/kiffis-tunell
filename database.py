@@ -1,19 +1,15 @@
 import asyncio
 from datetime import datetime, timedelta
-from postgrest import APIError
 from supabase import create_client, Client
 import config
 
-# 🔌 Подключаемся к Supabase с помощью ключей из конфига
+# 🔌 Подключаемся к Supabase
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-# 🧙‍♂️ МАГИЧЕСКАЯ ФУНКЦИЯ: Авто-создание всех таблиц прямо из кода!
+# 🧙‍♂️ Авто-создание всех таблиц прямо из кода
 async def init_database():
-    """Создает все необходимые таблицы в Supabase, если их еще нет"""
-    # SQL-команды для создания таблиц users, promocodes и my_proxies
-    # Мы используем встроенный RPC-функционал Supabase для выполнения SQL
+    """Создает необходимые таблицы в Supabase через RPC exec_sql"""
     queries = [
-        # 1. Таблица пользователей
         """
         CREATE TABLE IF NOT EXISTS public.users (
             id BIGSERIAL PRIMARY KEY,
@@ -27,7 +23,6 @@ async def init_database():
             active_minus_stars INT DEFAULT 0
         );
         """,
-        # 2. Таблица промокодов
         """
         CREATE TABLE IF NOT EXISTS public.promocodes (
             id BIGSERIAL PRIMARY KEY,
@@ -38,7 +33,6 @@ async def init_database():
             current_activations INT DEFAULT 0
         );
         """,
-        # 3. Таблица твоих личных прокси
         """
         CREATE TABLE IF NOT EXISTS public.my_proxies (
             id BIGSERIAL PRIMARY KEY,
@@ -50,20 +44,20 @@ async def init_database():
     
     for query in queries:
         try:
-            # Отправляем SQL-запрос напрямую в базу данных
             supabase.rpc("exec_sql", {"query": query}).execute()
         except Exception:
-            # Если exec_sql еще не настроен в Supabase, таблицы создадутся позже
             pass
 
 # 👤 ЛОГИКА ПОЛЬЗОВАТЕЛЕЙ
 async def get_user(user_id: int):
-    """Получает данные пользователя из базы"""
+    """Получает данные пользователя, учитывая особенности структуры ответа"""
     response = supabase.table("users").select("*").eq("user_id", user_id).execute()
-    return response.data[0] if response.data else None
+    if response.data:
+        return response.data[0] if isinstance(response.data, list) else response.data
+    return None
 
 async def create_user(user_id: int, username: str):
-    """Автоматически регистрирует нового пользователя при нажатии /start"""
+    """Автоматически регистрирует нового пользователя"""
     user = await get_user(user_id)
     if not user:
         data = {
@@ -77,7 +71,7 @@ async def create_user(user_id: int, username: str):
         supabase.table("users").insert(data).execute()
 
 async def activate_test_period(user_id: int):
-    """Активирует бесплатный тест на 3 дня (полный доступ)"""
+    """Активирует бесплатный тест на 3 дня"""
     expire_at = datetime.now() + timedelta(days=3)
     supabase.table("users").update({
         "expire_date": expire_at.isoformat(),
@@ -85,17 +79,15 @@ async def activate_test_period(user_id: int):
         "test_used": True
     }).eq("user_id", user_id).execute()
 
-# 📊 МЕГА-СТАТИСТИКА ДЛЯ АДМИН-ПАНЕЛИ
+# 📊 СТАТИСТИКА ДЛЯ АДМИН-ПАНЕЛИ
 async def get_admin_stats():
-    """Собирает самую глубокую и живую статистику для админки"""
+    """Собирает живую статистику из базы данных"""
     now = datetime.now().isoformat()
     
-    # Считаем общие цифры пользователей
     all_users = supabase.table("users").select("user_id", count="exact").execute().count
     active_users = supabase.table("users").select("user_id", count="exact").gt("expire_date", now).execute().count
     test_users = supabase.table("users").select("user_id", count="exact").eq("test_used", True).execute().count
     
-    # Разделение по категориям подписок
     vpn_cnt = supabase.table("users").select("user_id", count="exact").gt("expire_date", now).eq("tariff_type", "vpn").execute().count
     proxy_cnt = supabase.table("users").select("user_id", count="exact").gt("expire_date", now).eq("tariff_type", "proxy").execute().count
     whitelist_cnt = supabase.table("users").select("user_id", count="exact").gt("expire_date", now).eq("tariff_type", "whitelist").execute().count
@@ -113,11 +105,10 @@ async def get_admin_stats():
 
 # 🎟 ЛОГИКА ПРОМОКОДОВ
 async def apply_promo(user_id: int, code_text: str) -> str:
-    """Проверяет и активирует промокод для пользователя"""
-    # Ищем промокод в базе данных
+    """Активирует промокод и обрабатывает его типы без конфликтов кавычек"""
     promo_resp = supabase.table("promocodes").select("*").eq("code", code_text).execute()
+    
     if not promo_resp.data:
-        # Если в БД нет, ищем в стартовом конфиге (для первого запуска)
         if code_text in config.PROMOCODES_STARTUP:
             p = config.PROMOCODES_STARTUP[code_text]
             supabase.table("promocodes").insert({
@@ -127,43 +118,47 @@ async def apply_promo(user_id: int, code_text: str) -> str:
         else:
             return "❌ Такого промокода не существует, котик."
 
-    promo = promo_resp.data[0]
+    promo_data = promo_resp.data
+    promo = promo_data[0] if isinstance(promo_data, list) else promo_data
+    
     if promo["current_activations"] >= promo["max_activations"]:
         return "❌ К сожалению, этот промокод уже полностью разобрали!"
 
-    # Применяем эффекты промокода
-    if promo["type"] == "percent":
-        supabase.table("users").update({"active_discount": promo["value"]}).eq("user_id", user_id).execute()
-        res = f"🎟 Промокод применен! Твоя скидка {promo["value"]}% на следующую покупку."
-    elif promo["type"] == "stars":
-        supabase.table("users").update({"active_minus_stars": promo["value"]}).eq("user_id", user_id).execute()
-        res = f"🎟 Промокод применен! Ты получишь скидку в {promo["value"]} ⭐ Stars."
-    elif promo["type"] == "bonus_days":
-        # Начисляем бонусные дни сразу
+    p_type = promo["type"]
+    p_val = promo["value"]
+
+    if p_type == "percent":
+        supabase.table("users").update({"active_discount": p_val}).eq("user_id", user_id).execute()
+        res = f"🎟 Промокод применен! Твоя скидка {p_val}% на следующую покупку."
+    elif p_type == "stars":
+        supabase.table("users").update({"active_minus_stars": p_val}).eq("user_id", user_id).execute()
+        res = f"🎟 Промокод применен! Ты получишь скидку в {p_val} ⭐ Stars."
+    elif p_type == "bonus_days":
         user = await get_user(user_id)
-        current_expire = datetime.fromisoformat(user["expire_date"]) if user["expire_date"] else datetime.now()
-        new_expire = max(current_expire, datetime.now()) + timedelta(days=promo["value"])
+        current_expire = datetime.fromisoformat(user["expire_date"]) if (user and user.get("expire_date")) else datetime.now()
+        new_expire = max(current_expire, datetime.now()) + timedelta(days=p_val)
         supabase.table("users").update({
             "expire_date": new_expire.isoformat(),
             "tariff_type": "combo"
         }).eq("user_id", user_id).execute()
-        res = f"🎁 Ура! Тебе начислено +{promo["value"]} дней бесплатной подписки!"
-    elif promo["type"] == "percent_condition":
-        supabase.table("users").update({"active_discount": promo["value"]}).eq("user_id", user_id).execute()
-        res = f"🎟 Промокод применен! Скидка {promo["value"]}% сработает на тарифы от 50 звезд."
+        res = f"🎁 Ура! Тебе начислено +{p_val} дней бесплатной подписки!"
+    elif p_type == "percent_condition":
+        supabase.table("users").update({"active_discount": p_val}).eq("user_id", user_id).execute()
+        res = f"🎟 Промокод применен! Скидка {p_val}% сработает на тарифы от 50 звезд."
     else:
         return "❌ Ошибка активации кода."
 
-    # Увеличиваем счетчик активаций промокода
     supabase.table("promocodes").update({"current_activations": promo["current_activations"] + 1}).eq("code", code_text).execute()
     return res
 
 # 🧦 ЛОГИКА ТВОИХ ЛИЧНЫХ ПРОКСИ
 async def assign_free_proxy(user_id: int) -> str:
-    """Берет один свободный прокси со 'склада' БД и закрепляет за пользователем"""
+    """Берет один свободный прокси со склада и привязывает к пользователю"""
     response = supabase.table("my_proxies").select("*").is_("assigned_to", "null").limit(1).execute()
     if response.data:
-        proxy = response.data[0]
-        supabase.table("my_proxies").update({"assigned_to": user_id}).eq("id", promo["id"]).execute()
+        proxy_data = response.data
+        proxy = proxy_data[0] if isinstance(proxy_data, list) else proxy_data
+        # Баг исправлен: привязываем через правильный proxy["id"]
+        supabase.table("my_proxies").update({"assigned_to": user_id}).eq("id", proxy["id"]).execute()
         return proxy["proxy_link"]
-    return "⚠️ Ой, наши личные прокси на складе временно закончились! Напиши в поддержку [🆘 Поддержка], администратор сразу добавит новые."
+    return "⚠️ Наши приватные прокси временно закончились! Напиши в [🆘 Поддержка], администратор сразу добавит новые."
