@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiohttp import web
 
 # 1. Твой токен от @KIFFISST_BOT
-BOT_TOKEN = "8945413131:AAGz5xrT9_e9uLd1i2XE8gfzkUWjji469Qc"
+BOT_TOKEN = "8917018432:AAHomlpYmYcmM_-KMv0TsrmQ_Xv4xBFfDjc"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
