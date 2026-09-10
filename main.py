@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telebot import TeleBot, types
 
@@ -11,13 +12,13 @@ bot = TeleBot(BOT_TOKEN)
 
 URL_MAIN_IMG = "https://placehold.co"
 
-# Твои точные ссылки на статьи в Telegraph
-URL_IOS = "https://telegra.ph"
-URL_ANDROID = "https://telegra.ph"
-URL_AGREE = "https://telegra.ph"
+# Ссылки на твои статьи в Telegraph
+URL_IOS = "https://telegra.ph/Podrobnaya-instrukciya-dlya-iOS-iPhone--iPad-09-10"
+URL_ANDROID = "https://telegra.ph/Podrobnaya-instrukciya-dlya-Android-09-10"
+URL_AGREE = "https://telegra.ph/Polzovatelskoe-soglashenie-i-Politika-konfidencialnosti-Kiffis-Tunnel-09-10"
 
 
-# --- ФОНОВЫЙ ВЕБ-СЕРВЕР ДЛЯ RENDER ---
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 class WebServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -50,7 +51,7 @@ def cmd_start(message):
     markup.row(btn_ins, btn_promo)
     
     btn_help = types.InlineKeyboardButton("🆘 Помощь", callback_data="menu_help")
-    btn_agree = types.InlineKeyboardButton("📄 Соглашение", url=URL_AGREE) # Ссылка исправлена!
+    btn_agree = types.InlineKeyboardButton("📄 Соглашение", url=URL_AGREE)
     markup.row(btn_help, btn_agree)
     
     bot.send_photo(
@@ -62,7 +63,7 @@ def cmd_start(message):
     )
 
 
-# --- ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (CALLBACK) ---
+# --- CALLBACKS ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
     if call.data == "sub_menu_instruction":
@@ -88,7 +89,7 @@ def handle_callbacks(call):
         markup.row(types.InlineKeyboardButton("🌐 Просто VPN", callback_data="menu_vpn"), types.InlineKeyboardButton("🧦 Прокси", callback_data="menu_proxy"))
         markup.row(types.InlineKeyboardButton("🤍 Белые списки", callback_data="menu_wl"), types.InlineKeyboardButton("🔄 VPN + БС (Комбо)", callback_data="menu_combo"))
         markup.row(types.InlineKeyboardButton("📖 Инструкция", callback_data="sub_menu_instruction"), types.InlineKeyboardButton("🎟 Промокоды", callback_data="menu_promo"))
-        markup.row(types.InlineKeyboardButton("🆘 Помощь", callback_data="menu_help"), types.InlineKeyboardButton("📄 Соглашение", url=URL_AGREE)) # Ссылка исправлена!
+        markup.row(types.InlineKeyboardButton("🆘 Помощь", callback_data="menu_help"), types.InlineKeyboardButton("📄 Соглашение", url=URL_AGREE))
         
         bot.edit_message_caption(
             chat_id=call.message.chat.id,
@@ -103,8 +104,20 @@ def handle_callbacks(call):
 
 
 if __name__ == "__main__":
+    # 1. Запуск веб-сервера
     web_thread = threading.Thread(target=run_web_server, daemon=True)
     web_thread.start()
     
-    logging.info("Бот Kiffis Tunnel обновляется...")
-    bot.infinity_polling()
+    # 2. Очистка старых зависших соединений в Telegram перед стартом
+    logging.info("Сброс старых сессий Telegram...")
+    try:
+        bot.remove_webhook()
+    except Exception as e:
+        logging.warning(f"Не удалось удалить вебхук: {e}")
+        
+    time.sleep(2) # Небольшая пауза для стабилизации сессии
+    
+    logging.info("Бот Kiffis Tunnel успешно запущен...")
+    
+    # 3. Безопасный запуск опроса (игнорирует временные ошибки конфликта)
+    bot.infinity_polling(skip_pending=True)
