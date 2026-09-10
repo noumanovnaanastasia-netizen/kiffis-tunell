@@ -105,6 +105,7 @@ async def take_free_test(callback: CallbackQuery):
     await database.activate_test_period(user_id)
     await callback.answer("✨ 3 дня бесплатного теста успешно активированы!", show_alert=True)
     await open_profile(callback)
+
 @router.callback_query(F.data == "promo_enter")
 async def promo_enter(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -120,7 +121,6 @@ async def process_promo(message: Message, state: FSMContext):
     result = await database.apply_promo(message.from_user.id, code_text)
     await message.answer(result)
     await state.clear()
-
 @router.callback_query(F.data.startswith("buy_select_duration:"))
 async def buy_select_duration(callback: CallbackQuery):
     await callback.answer()
@@ -142,7 +142,10 @@ async def buy_select_duration(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("buy_select_devs:"))
 async def buy_select_devs(callback: CallbackQuery):
     await callback.answer()
-    _, tariff_type, duration = callback.data.split(":")
+    data_parts = callback.data.split(":")
+    tariff_type = data_parts[1]
+    duration = data_parts[2]
+    
     category = "premium" if tariff_type in ["whitelist", "combo"] else "base"
     prices = config.TARIFFS[category][duration]
     
@@ -168,8 +171,11 @@ async def buy_select_devs(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("checkout:"))
 async def checkout(callback: CallbackQuery):
     await callback.answer()
-    _, tariff_type, duration, devs = callback.data.split(":")
-    devs = int(devs)
+    data_parts = callback.data.split(":")
+    tariff_type = data_parts[1]
+    duration = data_parts[2]
+    devs = int(data_parts[3])
+    
     category = "premium" if tariff_type in ["whitelist", "combo"] else "base"
     base_price = config.TARIFFS[category][duration][devs]
     
@@ -177,22 +183,24 @@ async def checkout(callback: CallbackQuery):
     final_price = base_price
     
     if user:
-        if user["active_discount"] > 0:
-            if user["active_discount"] == 40 and base_price < 50:
+        discount = user[0].get("active_discount", 0) if isinstance(user, list) else user.get("active_discount", 0)
+        minus_stars = user[0].get("active_minus_stars", 0) if isinstance(user, list) else user.get("active_minus_stars", 0)
+        if discount > 0:
+            if discount == 40 and base_price < 50:
                 pass
             else:
-                final_price = int(base_price * (1 - user["active_discount"] / 100))
-        if user["active_minus_stars"] > 0:
-            final_price = base_price - user["active_minus_stars"]
+                final_price = int(base_price * (1 - discount / 100))
+        if minus_stars > 0:
+            final_price = base_price - minus_stars
             
     if final_price < 1:
         final_price = 1
 
-    prices = [LabeledPrice(label=f"Подписка {tariff_type} ({devs} устр.)", amount=final_price)]
+    prices = [LabeledPrice(label=f"Подписка {tariff_type}", amount=final_price)]
     
     await callback.message.answer_invoice(
         title="Оплата тарифа Kiffis Tunnel",
-        description=f"Тариф: {tariff_type} | Срок: {duration} | Устройств: {devs}",
+        description=f"Тариф: {tariff_type} | Срок: {duration}",
         prices=prices,
         provider_token="",
         payload=f"{tariff_type}:{duration}:{devs}",
@@ -207,12 +215,16 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
 @router.message(F.successful_payment)
 async def process_successful_payment(message: Message):
     payload = message.successful_payment.invoice_payload
-    tariff_type, duration, devs = payload.split(":")
-    devs = int(devs)
+    data_parts = payload.split(":")
+    tariff_type = data_parts[0]
+    duration = data_parts[1]
+    devs = int(data_parts[2])
     
     days = 3 if duration == "3_days" else (30 if duration == "1_month" else 90)
     user = await database.get_user(message.from_user.id)
-    current_expire = datetime.fromisoformat(user["expire_date"].replace("Z", "+00:00")) if user and user["expire_date"] else datetime.now()
+    user_data = user[0] if isinstance(user, list) else user
+    
+    current_expire = datetime.fromisoformat(user_data["expire_date"].replace("Z", "+00:00")) if user_data and user_data.get("expire_date") else datetime.now()
     new_expire = max(current_expire, datetime.now()) + timedelta(days=days)
     
     database.supabase.table("users").update({
