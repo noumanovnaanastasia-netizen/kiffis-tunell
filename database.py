@@ -3,10 +3,8 @@ from datetime import datetime, timedelta
 from supabase import create_client, Client
 import config
 
-# 🔌 Подключаемся к Supabase с жесткой защитой от пустых URL
-url_str = str(config.SUPABASE_URL or "https://supabase.co")
-key_str = str(config.SUPABASE_KEY or "placeholder")
-supabase: Client = create_client(url_str, key_str)
+# 🔌 Подключаемся к Supabase напрямую через переменные конфига
+supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
 # 🧙‍♂️ Авто-создание всех таблиц прямо из кода
 async def init_database():
@@ -107,7 +105,7 @@ async def get_admin_stats():
 
 # 🎟 ЛОГИКА ПРОМОКОДОВ
 async def apply_promo(user_id: int, code_text: str) -> str:
-    """Активирует промокод и обрабатывает его типы без конфликтов кавычек"""
+    """Активирует промокод и обрабатывает его типы"""
     promo_resp = supabase.table("promocodes").select("*").eq("code", code_text).execute()
     
     if not promo_resp.data:
@@ -160,7 +158,6 @@ async def assign_free_proxy(user_id: int) -> str:
     if response.data:
         proxy_data = response.data
         proxy = proxy_data[0] if isinstance(proxy_data, list) else proxy_data
-        # Баг исправлен: привязываем через правильный proxy["id"]
         supabase.table("my_proxies").update({"assigned_to": user_id}).eq("id", proxy["id"]).execute()
         return proxy["proxy_link"]
     return "⚠️ Наши приватные прокси временно закончились! Напиши в [🆘 Поддержка], администратор сразу добавит новые."
