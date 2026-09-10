@@ -1,3 +1,19 @@
+ from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I am alive"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 import asyncio
 import os
 import logging
@@ -49,4 +65,6 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    keep_alive()  # Запускаем веб-сервер для Render
+    asyncio.run(main())  # Запускаем вашего бота
+
