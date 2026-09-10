@@ -6,9 +6,9 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 # 1. Настройки (Вставь сюда СВОИ данные)
-BOT_TOKEN = "СЮДА_ВСТАВЬ_НОВЫЙ_ТОКЕН_ИЗ_BOTFATHER"
+BOT_TOKEN = "8945413131:AAGz5xrT9_e9uLd1i2XE8gfzkUWjji469Qc"
 # Сюда вставь ссылку на твое приложение в Render (например: https://onrender.com)
-RENDER_URL = "https://ТВОЕ_ИМЯ_://onrender.com" 
+RENDER_URL = "https://kiffis-tunell.onrender.com"
 
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBHOOK_URL = f"{RENDER_URL}{WEBHOOK_PATH}"
