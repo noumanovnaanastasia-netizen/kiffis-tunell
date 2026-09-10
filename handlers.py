@@ -318,3 +318,20 @@ async def cmd_help(message: Message):
         photo=config.PHOTO_SUPPORT,
         caption="🆘 <b>Служба поддержки Kiffis Tunnel</b>\n\nЕсли у тебя возникли проблемы с подключением, списанием Telegram Stars или настройкой прокси — не переживай, котик!\n\nНажми на навесную кнопку «🆘 Поддержка» внизу экрана, чтобы написать нашему администратору через безопасный чат."
     )
+
+@router.message(Command("addproxy"))
+async def cmd_add_proxy(message: Message):
+    if message.from_user.id != config.ADMIN_ID:
+        return
+        
+    proxy_text = message.text.replace("/addproxy", "").strip()
+    
+    if not proxy_text:
+        await message.answer("⚠️ <b>Как добавить прокси:</b>\n\nОтправь команду вот так:\n<code>/addproxy твои_данные_прокси</code>")
+        return
+        
+    try:
+        database.supabase.table("my_proxies").insert({"proxy_link": proxy_text}).execute()
+        await message.answer("✅ <b>Успех!</b> Прокси успешно загружен на склад базы данных и ждет своего покупателя, котик!")
+    except Exception as e:
+        await message.answer(f"❌ <b>Ошибка базы данных:</b>\n<code>{str(e)}</code>\n\nВозможно, этот прокси уже есть на складе.")
