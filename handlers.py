@@ -105,7 +105,6 @@ async def take_free_test(callback: CallbackQuery):
     await database.activate_test_period(user_id)
     await callback.answer("✨ 3 дня бесплатного теста успешно активированы!", show_alert=True)
     await open_profile(callback)
-
 @router.callback_query(F.data == "promo_enter")
 async def promo_enter(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -121,6 +120,7 @@ async def process_promo(message: Message, state: FSMContext):
     result = await database.apply_promo(message.from_user.id, code_text)
     await message.answer(result)
     await state.clear()
+
 @router.callback_query(F.data.startswith("buy_select_duration:"))
 async def buy_select_duration(callback: CallbackQuery):
     await callback.answer()
@@ -291,3 +291,10 @@ async def process_admin_broadcast(message: Message, state: FSMContext, bot: Bot)
             except Exception:
                 pass
     await message.answer(f"✅ Рассылка успешно завершена! Доставлено: {count} пользователям.")
+
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer_photo(
+        photo=config.PHOTO_SUPPORT,
+        caption="🆘 <b>Служба поддержки Kiffis Tunnel</b>\n\nЕсли у тебя возникли проблемы с подключением, списанием Telegram Stars или настройкой прокси — не переживай, котик!\n\nНажми на навесную кнопку «🆘 Поддержка» внизу экрана, чтобы написать нашему администратору через безопасный чат."
+    )
